@@ -9399,10 +9399,6 @@ declare namespace ts.server.protocol {
     }
 }
 declare namespace ts.server {
-    interface ScriptInfoVersion {
-        svc: number;
-        text: number;
-    }
     function isDynamicFileName(fileName: NormalizedPath): boolean;
     class ScriptInfo {
         private readonly host;
@@ -9417,7 +9413,7 @@ declare namespace ts.server {
         private formatSettings;
         private preferences;
         private textStorage;
-        constructor(host: ServerHost, fileName: NormalizedPath, scriptKind: ScriptKind, hasMixedContent: boolean, path: Path, initialVersion?: ScriptInfoVersion);
+        constructor(host: ServerHost, fileName: NormalizedPath, scriptKind: ScriptKind, hasMixedContent: boolean, path: Path);
         isScriptOpen(): boolean;
         open(newText: string): void;
         close(fileExists?: boolean): void;
@@ -9880,12 +9876,6 @@ declare namespace ts.server {
     }
     export class ProjectService {
         private readonly scriptInfoInNodeModulesWatchers;
-        /**
-         * Contains all the deleted script info's version information so that
-         * it does not reset when creating script info again
-         * (and could have potentially collided with version where contents mismatch)
-         */
-        private readonly filenameToScriptInfoVersion;
         private readonly allJsFilesForOpenFileTelemetry;
         /**
          * maps external project file name to list of config files that were the part of this project
