@@ -877,10 +877,10 @@ namespace ts {
     export interface PersistedProgram {
         files: readonly PersistedProgramSourceFile[] | undefined;
         rootFileNames: readonly string[] | undefined;
-        filesByName: MapLike<string | typeof missingSourceOfProjectReferenceRedirect | typeof missingFile> | undefined;
+        filesByName: readonly [fileId: ProgramBuildInfoFileId, file: ProgramBuildInfoFileId | typeof missingSourceOfProjectReferenceRedirect | typeof missingFile][] | undefined;
         projectReferences: readonly ProjectReference[] | undefined;
         resolvedProjectReferences: readonly (PersistedProgramResolvedProjectReference | undefined)[] | undefined;
-        missingPaths: readonly string[] | undefined;
+        missingPaths: readonly ProgramBuildInfoFileId[] | undefined;
         resolvedTypeReferenceDirectives: MapLike<number> | undefined;
         fileProcessingDiagnostics: readonly PersistedProgramFilePreprocessingDiagnostic[] | undefined;
         resolutions: readonly PersistedProgramResolution[] | undefined;
@@ -970,10 +970,10 @@ namespace ts {
             // persist program
             programFilesByName = new Map(program.getFilesByNameMap());
             const files = mapToReadonlyArrayOrUndefined(program.getSourceFiles(), toPersistedProgramSourceFile);
-            let filesByName: MapLike<string | false | 0> | undefined;
+            let filesByName: [fileId: ProgramBuildInfoFileId, file: ProgramBuildInfoFileId | typeof missingSourceOfProjectReferenceRedirect | typeof missingFile][] | undefined;
             for (const key of arrayFrom(programFilesByName.keys()).sort(compareStringsCaseSensitive)) {
                 const value = program.getFilesByNameMap().get(key)!;
-                (filesByName ||= {})[relativeToBuildInfo(key)] = value ? relativeToBuildInfo(value.path) : value;
+                (filesByName ||= []).push([toFileId(key), value ? toFileId(value.path) : value]);
             }
             peristedProgram = {
                 files,
@@ -981,7 +981,7 @@ namespace ts {
                 filesByName,
                 projectReferences: program.getProjectReferences()?.map(toProjectReference),
                 resolvedProjectReferences: program.getResolvedProjectReferences()?.map(toPersistedProgramResolvedProjectReference),
-                missingPaths: mapToReadonlyArrayOrUndefined(program.getMissingFilePaths(), relativeToBuildInfo),
+                missingPaths: mapToReadonlyArrayOrUndefined(program.getMissingFilePaths(), toFileId),
                 resolvedTypeReferenceDirectives: toPersistedProgramResolutionMap(program.getResolvedTypeReferenceDirectives()),
                 fileProcessingDiagnostics: mapToReadonlyArrayOrUndefined(program.getFileProcessingDiagnostics(), toPersistedProgramFilePreprocessingDiagnostic),
                 resolutions: mapToReadonlyArrayOrUndefined(resolutions, toPersistedProgramResolution),
@@ -1612,14 +1612,7 @@ namespace ts {
             let sourceFileFromExternalLibraryPath: Set<Path> | undefined;
             const redirectTargetsMap = createMultiMap<Path, string>();
             const sourceFileToPackageName = new Map<Path, string>();
-            if (program.peristedProgram.filesByName) {
-                for (const key in program.peristedProgram.filesByName) {
-                    if (hasProperty(program.peristedProgram.filesByName, key)) {
-                        const value = program.peristedProgram.filesByName[key];
-                        filesByName.set(toPath(key), isString(value) ? toPath(value) : value);
-                    }
-                }
-            }
+            program.peristedProgram.filesByName?.forEach(([fileId, file]) => filesByName.set(toFilePath(fileId), file ? toFilePath(file) : file as typeof missingSourceOfProjectReferenceRedirect | typeof missingFile));
             const resolutions = mapToReadonlyArray(program.peristedProgram.resolutions, toResolution);
             const files = mapToReadonlyArray(program.peristedProgram.files, toSourceFileOfProgramFromBuildInfo);
             state.persistedProgramInfo = {
@@ -1632,7 +1625,7 @@ namespace ts {
                 sourceFileToPackageName,
                 projectReferences: program.peristedProgram.projectReferences?.map(toProjectReference),
                 resolvedProjectReferences: program.peristedProgram.resolvedProjectReferences?.map(toResolvedProjectReference),
-                missingPaths: mapToReadonlyArray(program.peristedProgram.missingPaths, toPath),
+                missingPaths: mapToReadonlyArray(program.peristedProgram.missingPaths, toFilePath),
                 resolvedTypeReferenceDirectives: toResolutionMap(program.peristedProgram.resolvedTypeReferenceDirectives) || new Map(),
                 fileProcessingDiagnostics: map(program.peristedProgram.fileProcessingDiagnostics, toFileProcessingDiagnostic),
             };
