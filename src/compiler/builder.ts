@@ -865,11 +865,17 @@ namespace ts {
         args?: (string | number | undefined)[];
     }
     export type PersistedProgramFilePreprocessingDiagnostic = PersistedProgramFilePreprocessingReferencedDiagnostic | PersistedProgramFilePreprocessingFileExplainingDiagnostic;
+    export interface PersistedProgramProjectReference {
+        path: ProgramBuildInfoAbsoluteFileId;
+        originalPath?: string;
+        prepend?: boolean;
+        circular?: boolean;
+    }
     export interface PersistedProgramResolvedProjectReference {
         commandLine: {
-            fileNames: readonly string[] | undefined;
+            fileNames: readonly ProgramBuildInfoAbsoluteFileId[] | undefined;
             options: CompilerOptions;
-            projectReferences: readonly ProjectReference[] | undefined;
+            projectReferences: readonly PersistedProgramProjectReference[] | undefined;
         };
         sourceFile: { version: string; path: ProgramBuildInfoFileId; };
         references: readonly (PersistedProgramResolvedProjectReference | undefined)[] | undefined;
@@ -878,7 +884,7 @@ namespace ts {
         files: readonly PersistedProgramSourceFile[] | undefined;
         rootFileNames: readonly string[] | undefined;
         filesByName: readonly [fileId: ProgramBuildInfoFileId, file: ProgramBuildInfoFileId | typeof missingSourceOfProjectReferenceRedirect | typeof missingFile][] | undefined;
-        projectReferences: readonly ProjectReference[] | undefined;
+        projectReferences: readonly PersistedProgramProjectReference[] | undefined;
         resolvedProjectReferences: readonly (PersistedProgramResolvedProjectReference | undefined)[] | undefined;
         missingPaths: readonly ProgramBuildInfoFileId[] | undefined;
         resolvedTypeReferenceDirectives: MapLike<number> | undefined;
@@ -979,7 +985,7 @@ namespace ts {
                 files,
                 rootFileNames: mapToReadonlyArrayOrUndefined(program.getRootFileNames(), relativeToBuildInfoEnsuringAbsolutePath),
                 filesByName,
-                projectReferences: program.getProjectReferences()?.map(toProjectReference),
+                projectReferences: program.getProjectReferences()?.map(toPersistedProgramProjectReference),
                 resolvedProjectReferences: program.getResolvedProjectReferences()?.map(toPersistedProgramResolvedProjectReference),
                 missingPaths: mapToReadonlyArrayOrUndefined(program.getMissingFilePaths(), toFileId),
                 resolvedTypeReferenceDirectives: toPersistedProgramResolutionMap(program.getResolvedTypeReferenceDirectives()),
@@ -1093,22 +1099,17 @@ namespace ts {
         function toPersistedProgramResolvedProjectReference(ref: ResolvedProjectReference | undefined): PersistedProgramResolvedProjectReference | undefined {
             return ref && {
                 commandLine: {
-                    fileNames: mapToReadonlyArrayOrUndefined(ref.commandLine.fileNames, relativeToBuildInfoEnsuringAbsolutePath),
+                    fileNames: mapToReadonlyArrayOrUndefined(ref.commandLine.fileNames, toAbsoluteFileId),
                     options: convertToReusableCompilerOptions(ref.commandLine.options, relativeToBuildInfoEnsuringAbsolutePath),
-                    projectReferences: mapToReadonlyArrayOrUndefined(ref.commandLine.projectReferences, toProjectReference)
+                    projectReferences: mapToReadonlyArrayOrUndefined(ref.commandLine.projectReferences, toPersistedProgramProjectReference)
                 },
                 sourceFile: { version: ref.sourceFile.version, path: toFileId(ref.sourceFile.path) },
                 references: mapToReadonlyArrayOrUndefined(ref.references, toPersistedProgramResolvedProjectReference)
             };
         }
 
-        function toProjectReference(ref: ProjectReference): ProjectReference {
-            return {
-                path: relativeToBuildInfoEnsuringAbsolutePath(ref.path),
-                originalPath: ref.originalPath,
-                prepend: ref.prepend,
-                circular: ref.circular
-            };
+        function toPersistedProgramProjectReference(ref: ProjectReference): PersistedProgramProjectReference {
+            return { ...ref, path: toAbsoluteFileId(ref.path) };
         }
 
         function isResolvedModule(r: ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations): r is ResolvedModuleWithFailedLookupLocations {
@@ -1737,19 +1738,14 @@ namespace ts {
             };
         }
 
-        function toProjectReference(ref: ProjectReference): ProjectReference {
-            return {
-                path: toAbsolutePath(ref.path),
-                originalPath: ref.originalPath,
-                prepend: ref.prepend,
-                circular: ref.circular
-            };
+        function toProjectReference(ref: PersistedProgramProjectReference): ProjectReference {
+            return { ...ref, path: toFileAbsolutePath(ref.path) };
         }
 
         function toResolvedProjectReference(ref: PersistedProgramResolvedProjectReference | undefined): ResolvedProjectReferenceOfProgramFromBuildInfo | undefined {
             return ref && {
                 commandLine: {
-                    fileNames: ref.commandLine.fileNames?.map(toAbsolutePath) || [],
+                    fileNames: ref.commandLine.fileNames?.map(toFileAbsolutePath) || [],
                     options: convertToOptionsWithAbsolutePaths(ref.commandLine.options, toAbsolutePath),
                     projectReferences: ref.commandLine.projectReferences?.map(toProjectReference)
                 },
